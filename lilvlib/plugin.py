@@ -32,6 +32,17 @@ class Plugin:
         self.errors = []
         self.warnings = []
 
+        self.bundleuri = self.plugin.get_bundle_uri().as_string()
+        self.bundle = lilv.lilv_uri_to_path(self.bundleuri)
+
+
+    def plugin_get_first_value(self, subject):
+        return self.plugin.get_value(subject).get_first()
+
+    def plugin_get_first_value_as_string(self, subject):
+        return self.plugin_get_first_value(subject).get_first().as_string() \
+            or ""
+
     @property
     def uri(self):
         uri = self.plugin.get_uri().as_string() or ""
@@ -57,18 +68,20 @@ class Plugin:
 
     @property
     def binary(self):
-        binary = lilv.lilv_uri_to_path(self.plugin.get_library_uri().as_string() or "")
+        binary = lilv.lilv_uri_to_path(
+            self.plugin.get_library_uri().as_string() or ""
+        )
 
         if not binary:
             self.errors.append("plugin binary is missing")
-        elif not useAbsolutePath:
-            binary = binary.replace(bundle,"",1)
+        elif not self.useAbsolutePath:
+            binary = binary.replace(self.bundle, "", 1)
 
         return binary
 
     @property
     def license(self):
-        lic = self.plugin.get_value(self.ns_doap.license).get_first().as_string() or ""
+        lic = self.plugin_get_first_value_as_string(self.ns_doap.license)
 
         if not lic:
             prj = self.plugin.get_value(self.ns_lv2core.project).get_first()
@@ -82,15 +95,15 @@ class Plugin:
         if not lic:
             self.errors.append("plugin license is missing")
 
-        elif lic.startswith(bundleuri):
-            lic = lic.replace(bundleuri,"",1)
+        elif lic.startswith(self.bundleuri):
+            lic = lic.replace(self.bundleuri, "", 1)
             self.warnings.append("plugin license entry is a local path instead of a string")
 
         return lic
 
     @property
     def comment(self):
-        comment = self.plugin.get_value(self.ns_rdfs.comment).get_first().as_string() or ""
+        comment = self.plugin_get_first_value_as_string(self.ns_rdfs.comment)
 
         if not comment:
             self.errors.append("plugin comment is missing")
@@ -99,8 +112,8 @@ class Plugin:
 
     @property
     def version(self):
-        microver = self.plugin.get_value(ns_lv2core.microVersion).get_first()
-        minorver = self.plugin.get_value(ns_lv2core.minorVersion).get_first()
+        microver = self.plugin_get_first_value(self.ns_lv2core.microVersion)
+        minorver = self.plugin_get_first_value(self.ns_lv2core.minorVersion)
 
         if microver.me is None and minorver.me is None:
             self.errors.append("plugin is missing version information")
@@ -137,7 +150,7 @@ class Plugin:
         else:
             stability = "stable"
 
-        return (minorVersion, microVersion, stability)
+        return (version, minorVersion, microVersion, stability)
 
     @property
     def author(self):
@@ -167,8 +180,8 @@ class Plugin:
 
         if not author['email']:
             pass
-        elif author['email'].startswith(bundleuri):
-            author['email'] = author['email'].replace(bundleuri,"",1)
+        elif author['email'].startswith(self.bundleuri):
+            author['email'] = author['email'].replace(self.bundleuri,"",1)
             self.warnings.append("plugin author email entry is missing 'mailto:' prefix")
         elif author['email'].startswith("mailto:"):
             author['email'] = author['email'].replace("mailto:","",1)
@@ -176,7 +189,7 @@ class Plugin:
         return author
 
     @property
-    def brand(self):
+    def brand(self, author):
         brand = self.get_plugin_first_value_as_string(self.ns_mod.brand)
 
         if not brand:
@@ -192,9 +205,6 @@ class Plugin:
 
         return brand
 
-    def get_plugin_first_value_as_string(self, subject):
-        return self.plugin.get_value(subject).get_first().as_string() or ""
-
     @property
     def label(self):
         name = self.name
@@ -205,7 +215,9 @@ class Plugin:
                 label = name
             else:
                 labels = name.split(" - ", 1)[0].split(" ")
-                if labels[0].lower() in bundle.lower() and len(labels) > 1 and not labels[1].startswith(("(","[")):
+                if labels[0].lower() in self.bundle.lower() \
+                   and len(labels) > 1 \
+                   and not labels[1].startswith(("(", "[")):
                     label = labels[1]
                 else:
                     label = labels[0]
@@ -222,9 +234,6 @@ class Plugin:
 
     @property
     def bundles(self):
-        bundleuri = self.plugin.get_bundle_uri().as_string()
-        bundle = lilv.lilv_uri_to_path(bundleuri)
-
         if not self.useAbsolutePath:
             return []
 
@@ -253,8 +262,8 @@ class Plugin:
             if bpath not in bundles:
                 bundles.append(bpath)
 
-        if bundle not in bundles:
-            bundles.append(bundle)
+        if self.bundle not in bundles:
+            bundles.append(self.bundle)
 
         del bnodes, it
 
