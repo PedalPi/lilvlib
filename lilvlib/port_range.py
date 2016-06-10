@@ -4,22 +4,22 @@
 from math import fmod
 
 import lilv
-from .lilv import is_integer
-from .lilvlib import NS
+from lilvlib import NS, is_integer
 
 
 class PortRange:
 
-    def __init__(self, world, port):
+    def __init__(self, world, port, properties):
         self.ns_lv2core = NS(world, lilv.LILV_NS_LV2)
         self.ns_mod = NS(world, "http://moddevices.com/ns/mod#")
 
         self.errors = []
         self.warnings = []
 
+        self.port = port.port
         self.portname = port.portname
         self.types = port.types
-        self.properties = port.properties
+        self.properties = properties
         self.designation = port.designation
 
         xdefault = self.get_first_port_node(self.ns_mod.default.me) or \
@@ -36,7 +36,7 @@ class PortRange:
         )
 
     def register_error(self, message, params=()):
-        self.errors.append('port %s' % self.portname + message % params)
+        self.errors.append('port %s ' % self.portname + message % params)
 
     def get_first_port_node(self, subject):
         return lilv.lilv_nodes_get_first(self.port.get_value(subject))
@@ -50,7 +50,7 @@ class PortRange:
         rangeIsDeclared = xminimum is not None and xmaximum is not None
 
         if rangeIsDeclared:
-            return self.generage_known_range(
+            return self.generate_known_range(
                 isInteger,
                 xminimum,
                 xmaximum,
@@ -58,13 +58,17 @@ class PortRange:
             )
 
         else:
-            return self.generage_unknown_range(isInteger)
+            return self.generate_unknown_range(isInteger)
 
-    def generate_know_range(self, isInteger, xminimum, xmaximum, xdefault):
-        ranges = self.generage_known_minimun_and_maximum(isInteger, xminimum, xmaximum)
+    def generate_known_range(self, isInteger, xminimum, xmaximum, xdefault):
+        ranges = self.generate_known_minimun_and_maximum(
+            isInteger,
+            xminimum,
+            xmaximum
+        )
 
         if xdefault is not None:
-            ranges['default'] = self.generate_know_default(
+            ranges['default'] = self.generate_known_default(
                 isInteger,
                 xdefault,
                 ranges['minimum'],
@@ -74,9 +78,11 @@ class PortRange:
             ranges['default'] = ranges['minimum']
 
             if "Input" in self.types:
-               self.register_error("is missing default value")
+                self.register_error("is missing default value")
 
-    def generage_known_minimun_and_maximum(self, isInteger, xminimum, xmaximum):
+        return ranges
+
+    def generate_known_minimun_and_maximum(self, isInteger, xminimum, xmaximum):
         if isInteger:
             ranges = self.range_integer(xminimum, xmaximum)
         else:
@@ -144,7 +150,7 @@ class PortRange:
 
         return default
 
-    def generage_unknown_range(self, isInteger):
+    def generate_unknown_range(self, isInteger):
         ranges = {}
 
         if isInteger:

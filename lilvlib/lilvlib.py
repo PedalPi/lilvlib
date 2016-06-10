@@ -4,7 +4,6 @@
 # ------------------------------------------------------------------------------------------------------------
 # Imports
 
-import json
 import lilv
 import os
 
@@ -33,7 +32,6 @@ class NS(object):
 
 def is_integer(string):
     return string.strip().lstrip("-+").isdigit()
-
 
 # ------------------------------------------------------------------------------------------------------------
 
@@ -87,39 +85,6 @@ def get_category(nodes):
         if cat not in categories:
             categories.append(cat)
     return categories
-
-
-def get_port_unit(miniuri):
-  # using label, render, symbol
-  units = {
-      's': ["seconds", "%f s", "s"],
-      'ms': ["milliseconds", "%f ms", "ms"],
-      'min': ["minutes", "%f mins", "min"],
-      'bar': ["bars", "%f bars", "bars"],
-      'beat': ["beats", "%f beats", "beats"],
-      'frame': ["audio frames", "%f frames", "frames"],
-      'm': ["metres", "%f m", "m"],
-      'cm': ["centimetres", "%f cm", "cm"],
-      'mm': ["millimetres", "%f mm", "mm"],
-      'km': ["kilometres", "%f km", "km"],
-      'inch': ["inches", """%f\"""", "in"],
-      'mile': ["miles", "%f mi", "mi"],
-      'db': ["decibels", "%f dB", "dB"],
-      'pc': ["percent", "%f%%", "%"],
-      'coef': ["coefficient", "* %f", "*"],
-      'hz': ["hertz", "%f Hz", "Hz"],
-      'khz': ["kilohertz", "%f kHz", "kHz"],
-      'mhz': ["megahertz", "%f MHz", "MHz"],
-      'bpm': ["beats per minute", "%f BPM", "BPM"],
-      'oct': ["octaves", "%f octaves", "oct"],
-      'cent': ["cents", "%f ct", "ct"],
-      'semitone12TET': ["semitones", "%f semi", "semi"],
-      'degree': ["degrees", "%f deg", "deg"],
-      'midiNote': ["MIDI note", "MIDI note %d", "note"],
-  }
-  if miniuri in units.keys():
-      return units[miniuri]
-  return ("","","")
 
 # ------------------------------------------------------------------------------------------------------------
 # get_bundle_dirname
@@ -466,8 +431,7 @@ def plugin_has_modgui(world, plugin):
 
 # Get info from a lilv plugin
 # This is used in get_plugins_info below and MOD-SDK
-
-
+'''
     # --------------------------------------------------------------------------------------------------------
     # presets
 
@@ -497,78 +461,4 @@ def plugin_has_modgui(world, plugin):
         del unsorted, uris
 
     del presets_related
-
-    # --------------------------------------------------------------------------------------------------------
-    # done
-
-    return {
-        'uri' : uri,
-        'name': name,
-
-        'binary' : binary,
-        'brand'  : brand,
-        'label'  : label,
-        'license': license,
-        'comment': comment,
-
-        'category'    : get_category(plugin.get_value(ns_rdf.type_)),
-        'microVersion': microVersion,
-        'minorVersion': minorVersion,
-
-        'version'  : version,
-        'stability': stability,
-
-        'author' : author,
-        'bundles': bundles,
-        'gui'    : gui,
-        'ports'  : ports,
-        'presets': presets,
-
-        'errors'  : errors,
-        'warnings': warnings,
-    }
-
-# ------------------------------------------------------------------------------------------------------------
-# get_plugin_info_helper
-
-# Get info from a simple URI, without the need of your own lilv world
-# This is used by get_plugins_info in MOD-SDK
-def get_plugin_info_helper(uri):
-    world = lilv.World()
-    world.load_all()
-    plugins = world.get_all_plugins()
-    return [get_plugin_info(world, p, False) for p in plugins]
-
-
-
-# ------------------------------------------------------------------------------------------------------------
-
-if __name__ == '__main__':
-    from sys import argv, exit
-    from pprint import pprint
-    #get_plugins_info(argv[1:])
-    #for i in get_plugins_info(argv[1:]): pprint(i)
-    #exit(0)
-    for i in get_plugins_info(argv[1:]):
-        warnings = i['warnings'].copy()
-
-        if 'plugin brand is missing' in warnings:
-            i['warnings'].remove('plugin brand is missing')
-
-        if 'plugin label is missing' in warnings:
-            i['warnings'].remove('plugin label is missing')
-
-        if 'no modgui available' in warnings:
-            i['warnings'].remove('no modgui available')
-
-        for warn in warnings:
-            if "has no short name" in warn:
-                i['warnings'].remove(warn)
-
-        pprint({
-            'uri'     : i['uri'],
-            'errors'  : i['errors'],
-            'warnings': i['warnings']
-        }, width=200)
-
-# ------------------------------------------------------------------------------------------------------------
+'''

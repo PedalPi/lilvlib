@@ -4,12 +4,13 @@
 import lilv
 import os
 
-from .lilvlib import NS
-from .port import Port
-from .plugin_author import PluginAuthor
+from lilvlib import NS, get_category
+from port import Port
+from plugin_author import PluginAuthor
 
 
 class Plugin:
+    LABEL_NAME_SIZE = 16
 
     def __init__(self, world, plugin, useAbsolutePath=True):
         self.world = world
@@ -17,16 +18,12 @@ class Plugin:
         self.useAbsolutePath = useAbsolutePath
 
         self.ns_doap = NS(world, lilv.LILV_NS_DOAP)
-        #self.ns_foaf = NS(world, lilv.LILV_NS_FOAF)
-        #self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
-        self.ns_rdfs = NS(world, lilv.LILV_NS_RDFS)
         self.ns_lv2core = NS(world, lilv.LILV_NS_LV2)
-        #self.ns_atom = NS(world, "http://lv2plug.in/ns/ext/atom#")
-        #self.ns_midi = NS(world, "http://lv2plug.in/ns/ext/midi#")
+        self.ns_rdfs = NS(world, lilv.LILV_NS_RDFS)
+        self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
+
         self.ns_morph = NS(world, "http://lv2plug.in/ns/ext/morph#")
-        self.ns_pprops = NS(world, "http://lv2plug.in/ns/ext/port-props#")
         self.ns_pset = NS(world, "http://lv2plug.in/ns/ext/presets#")
-        #self.ns_units = NS(world, "http://lv2plug.in/ns/extensions/units#")
         self.ns_mod = NS(world, "http://moddevices.com/ns/mod#")
         self.ns_modgui = NS(world, "http://moddevices.com/ns/modgui#")
 
@@ -36,22 +33,76 @@ class Plugin:
         self.bundleuri = self.plugin.get_bundle_uri().as_string()
         self.bundle = lilv.lilv_uri_to_path(self.bundleuri)
 
-        self.author = PluginAuthor(
+        self.author = self.generate_author(
             world,
             plugin,
-            self.bundleuri,
-            self.ns_doap
-        ).author
+            self.bundleuri
+        )
+
+        self.uri = self.generate_uri()
+        self.name = self.generate_name()
+
+        self.binary = self.generate_binary(self.bundle)
+        self.brand = self.generate_brand(self.author)
+        self.label = self.generate_label()
+        self.theLicense = self.generate_license()
+        self.comment = self.generate_comment()
+
+        self.version, self.minorVersion, self.microVersion = \
+            self.generate_version_data()
+
+        self.stability = self.generate_stability(
+            self.minorVersion,
+            self.microVersion
+        )
+
+        self.bundles = self.generate_bundles()
+
+        self.ports = self.generate_ports()
+
+        self.data = {
+            'uri': self.uri,
+            'name': self.name,
+
+            'binary': self.binary,
+            'brand': self.brand,
+            'label': self.label,
+            'license': self.theLicense,
+            'comment': self.comment,
+
+            'category': get_category(plugin.get_value(self.ns_rdf.type_)),
+            'microVersion': self.microVersion,
+            'minorVersion': self.minorVersion,
+
+            'version': self.version,
+            'stability': self.stability,
+
+            'author': self.author,
+            'bundles': self.bundles,
+            'gui': None,  # gui,
+            'ports': self.ports,
+            'presets': [],  # presets,
+
+            'errors': self.errors,
+            'warnings': self.warnings,
+        }
+
+    def plugin_get_first_value_as_string(self, subject):
+        return self.plugin_get_first_value(subject).as_string() \
+            or ""
 
     def plugin_get_first_value(self, subject):
         return self.plugin.get_value(subject).get_first()
 
-    def plugin_get_first_value_as_string(self, subject):
-        return self.plugin_get_first_value(subject).get_first().as_string() \
-            or ""
+    def generate_author(self, world, plugin, bundleuri):
+        author = PluginAuthor(world, plugin, bundleuri)
 
-    @property
-    def uri(self):
+        self.errors += author.errors
+        self.warnings += author.warnings
+
+        return author.author
+
+    def generate_uri(self):
         uri = self.plugin.get_uri().as_string() or ""
 
         if not uri:
@@ -64,8 +115,7 @@ class Plugin:
 
         return uri
 
-    @property
-    def name(self):
+    def generate_name(self):
         name = self.plugin.get_name().as_string() or ""
 
         if not name:
@@ -73,8 +123,7 @@ class Plugin:
 
         return name
 
-    @property
-    def binary(self):
+    def generate_binary(self, bundle):
         binary = lilv.lilv_uri_to_path(
             self.plugin.get_library_uri().as_string() or ""
         )
@@ -82,12 +131,55 @@ class Plugin:
         if not binary:
             self.errors.append("plugin binary is missing")
         elif not self.useAbsolutePath:
-            binary = binary.replace(self.bundle, "", 1)
+            binary = binary.replace(bundle, "", 1)
 
         return binary
 
-    @property
-    def license(self):
+    def generate_brand(self, author):
+        brand = self.plugin_get_first_value_as_string(self.ns_mod.brand)
+
+        if not brand:
+            brand = author['name'].split(" - ", 1)[0].split(" ", 1)[0]
+            brand = brand.rstrip(",").rstrip(";")
+            if len(brand) > 11:
+                brand = brand[:11]
+            self.warnings.append("plugin brand is missing")
+
+        elif len(brand) > 11:
+            brand = brand[:11]
+            self.errors.append("plugin brand has more than 11 characters")
+
+        return brand
+
+    def generate_label(self):
+        name = self.name
+        label = self.plugin_get_first_value_as_string(self.ns_mod.label)
+
+        if not label:
+            if len(name) <= Plugin.LABEL_NAME_SIZE:
+                label = name
+            else:
+                labels = name.split(" - ", 1)[0].split(" ")
+                if labels[0].lower() in self.bundle.lower() \
+                   and len(labels) > 1 \
+                   and not labels[1].startswith(("(", "[")):
+                    label = labels[1]
+                else:
+                    label = labels[0]
+
+                if len(label) > Plugin.LABEL_NAME_SIZE:
+                    label = label[:Plugin.LABEL_NAME_SIZE]
+
+                self.warnings.append("plugin label is missing")
+                del labels
+
+        elif len(label) > Plugin.LABEL_NAME_SIZE:
+            label = label[:Plugin.LABEL_NAME_SIZE]
+            self.errors.append("plugin label has more than 16 characters")
+
+        return label
+
+    def generate_license(self):
         lic = self.plugin_get_first_value_as_string(self.ns_doap.license)
 
         if not lic:
@@ -113,8 +205,7 @@ class Plugin:
 
         return lic
 
-    @property
-    def comment(self):
+    def generate_comment(self):
         comment = self.plugin_get_first_value_as_string(self.ns_rdfs.comment)
 
         if not comment:
@@ -122,8 +213,7 @@ class Plugin:
 
         return comment
 
-    @property
-    def version(self):
+    def generate_version_data(self):
         microver = self.plugin_get_first_value(self.ns_lv2core.microVersion)
         minorver = self.plugin_get_first_value(self.ns_lv2core.minorVersion)
 
@@ -150,6 +240,9 @@ class Plugin:
 
         version = "%d.%d" % (minorVersion, microVersion)
 
+        return version, minorVersion, microVersion
+
+    def generate_stability(self, minorVersion, microVersion):
         # 0.x is experimental
         if minorVersion == 0:
             stability = "experimental"
@@ -162,54 +255,9 @@ class Plugin:
         else:
             stability = "stable"
 
-        return (version, minorVersion, microVersion, stability)
+        return stability
 
-    @property
-    def brand(self, author):
-        brand = self.get_plugin_first_value_as_string(self.ns_mod.brand)
-
-        if not brand:
-            brand = author['name'].split(" - ", 1)[0].split(" ", 1)[0]
-            brand = brand.rstrip(",").rstrip(";")
-            if len(brand) > 11:
-                brand = brand[:11]
-            self.warnings.append("plugin brand is missing")
-
-        elif len(brand) > 11:
-            brand = brand[:11]
-            self.errors.append("plugin brand has more than 11 characters")
-
-        return brand
-
-    @property
-    def label(self):
-        name = self.name
-        label = self.get_plugin_first_value_as_string(self.ns_mod.label)
-
-        if not label:
-            if len(name) <= 16:
-                label = name
-            else:
-                labels = name.split(" - ", 1)[0].split(" ")
-                if labels[0].lower() in self.bundle.lower() \
-                   and len(labels) > 1 \
-                   and not labels[1].startswith(("(", "[")):
-                    label = labels[1]
-                else:
-                    label = labels[0]
-
-                if len(label) > 16:
-                    label = label[:16]
-
-                self.warnings.append("plugin label is missing")
-                del labels
-
-        elif len(label) > 16:
-            label = label[:16]
-            self.errors.append("plugin label has more than 16 characters")
-
-    @property
-    def bundles(self):
+    def generate_bundles(self):
         if not self.useAbsolutePath:
             return []
 
@@ -245,7 +293,7 @@ class Plugin:
 
         return bundles
 
-    def ports(self):
+    def generate_ports(self):
         index = 0
         ports = {
             'audio': {'input': [], 'output': []},
@@ -253,13 +301,14 @@ class Plugin:
             'midi': {'input': [], 'output': []}
         }
 
-        portsymbols = []
-        portnames   = []
-
         for i in range(self.plugin.get_num_ports()):
             p = self.plugin.get_port_by_index(i)
 
-            types, info = Port(self.world, p, index).data
+            port = Port(self.world, p, index)
+            types, info = port.data
+
+            self.errors += port.errors
+            self.warnings += port.warnings
 
             info['index'] = index
             index += 1
@@ -272,7 +321,12 @@ class Plugin:
                     ports[typ] = {'input': [], 'output': []}
                 ports[typ]["input" if isInput else "output"].append(info)
 
+        return ports
+
         '''
+        portsymbols = []
+        portnames   = []
+
         # check for duplicate names
         if portname in portsymbols:
             self.warnings.append("port name '%s' is not unique" % portname)

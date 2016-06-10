@@ -2,33 +2,41 @@
 # -*- coding: utf-8 -*-
 
 import lilv
-from .lilv import is_integer
-from .lilvlib import NS
-from .port_unit import PortUnit
-from .port_range import PortRange
+from lilvlib import NS, is_integer
+from port_unit import PortUnit
+from port_range import PortRange
+
+from math import fmod
 
 
 class Port:
     SHORT_NAME_SIZE = 16
 
-    def __init__(self, world, port, index, ns_lv2core, ns_mod):
-        self.ns_lv2core = ns_lv2core
-        self.ns_mod = ns_mod
-
-        self.ns_midi = NS(world, "http://lv2plug.in/ns/ext/midi#")
-        self.ns_atom = NS(world, "http://lv2plug.in/ns/ext/atom#")
-        self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
-
+    def __init__(self, world, port, index):
         self.errors = []
         self.warnings = []
 
+        self.ns_lv2core = NS(world, lilv.LILV_NS_LV2)
+        self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
+
+        self.ns_atom = NS(world, "http://lv2plug.in/ns/ext/atom#")
+        self.ns_midi = NS(world, "http://lv2plug.in/ns/ext/midi#")
+        self.ns_mod = NS(world, "http://moddevices.com/ns/mod#")
+        self.ns_pprops = NS(world, "http://lv2plug.in/ns/ext/port-props#")
+
+        self.port = port
+
         self.portname = self.generate_portname(index)
         self.portsymbol = self.generate_portsymbol(index)
-        self.pname = self.generate_psname()
+        self.psname = self.generate_psname()
         self.types = self.generate_types()
         self.designation = self.generate_designation()
 
-        #FIXME macarronada
+        data = self.generate_properties_ranges_scalepoints_units(world)
+        self.properties = data['properties']
+        self.ranges = data['ranges']
+        self.scalepoints = data['scalepoints']
+        self.units = data['units']
 
         self.data = (
             self.types,
@@ -43,7 +51,7 @@ class Port:
                     self.get_port_data(self.port, self.ns_mod.rangeSteps) or \
                     self.get_port_data(self.port, self.ns_pprops.rangeSteps) or [None] \
                 )[0],
-                'scalePoints': scalepoints,
+                'scalePoints': self.scalepoints,
                 'shortName': self.psname,
             }
         )
@@ -148,7 +156,7 @@ class Port:
              or [""]
         )[0]
 
-    def macarronada(self, world):
+    def generate_properties_ranges_scalepoints_units(self, world):
         properties = [
             typ.rsplit("#", 1)[-1]
             for typ in self.get_port_data(
@@ -157,37 +165,47 @@ class Port:
             )
         ]
 
-        # data
         ranges = {}
         scalepoints = []
         units = {}
 
+        #control and cv must contain ranges, might contain scale points
         if "Control" in self.types or "CV" in self.types:
-            portRange = PortRange(world, self)
+            portRange = PortRange(world, self, properties)
 
             self.errors += portRange.errors
             self.warnings += portRange.warnings
 
             ranges = portRange.ranges
+            scalepoints = self.generate_scale_points(ranges, properties)
 
-            self.control_with_range2()
-            self.control_with_range3()
+            if "enumeration" in properties and len(scalepoints) <= 1:
+                self.register_error("wants to use enumeration but doesn't have enough values")
+                properties.remove("enumeration")
 
         if "Control" in self.types:
-            portUnit = PortUnit(world, self.portname)
+            portUnit = PortUnit(world, self.port, self.portname, self.types)
 
             self.errors += portUnit.errors
             self.warnings += portUnit.warnings
 
             units = portUnit.units
 
-    '''control and cv must contain ranges, might contain scale points'''
-    def control_with_range2(self):
+        return {
+            'properties': properties,
+            'ranges': ranges,
+            'scalepoints': scalepoints,
+            'units': units
+        }
+
+    def generate_scale_points(self, ranges, properties):
         nodes = self.port.get_scale_points()
+        isInteger = "integer" in properties
 
         if nodes is None:
-            return
+            return []
 
+        scalepoints = []
         scalepoints_unsorted = []
 
         it = lilv.lilv_scale_points_begin(nodes)
@@ -216,39 +234,53 @@ class Port:
                 continue
 
             if isInteger:
-                if is_integer(lilv.lilv_node_as_string(value)):
-                    value = lilv.lilv_node_as_int(value)
-                else:
-                    value = lilv.lilv_node_as_float(value)
-                    if fmod(value, 1.0) == 0.0:
-                        self.warnings.append("port '%s' has integer property but scalepoint '%s' value is float" % (self.portname, label))
-                    else:
-                        self.register_error("has integer property but scalepoint '%s' value has non-zero decimals" label)
-                    value = int(value)
+                value = self.value_integer(value, 'scalepoint')
             else:
                 if is_integer(lilv.lilv_node_as_string(value)):
-                    self.warnings.append("port '%s' scalepoint '%s' value is an integer" % (portname, label))
+                    self.warnings.append("port '%s' scalepoint '%s' value is an integer" % (self.portname, label))
                 value = lilv.lilv_node_as_float(value)
 
             if ranges['minimum'] <= value <= ranges['maximum']:
                 scalepoints_unsorted.append((value, label))
             else:
-                self.errors.append(("port scalepoint '%s' has an out-of-bounds value:\n" % label) +
-                              ("%d < %d < %d" if isInteger else "%f < %f < %f") % (ranges['minimum'], value, ranges['maximum']))
+                self.errors.append(
+                    ("port scalepoint '%s' has an out-of-bounds value:\n" % label) +
+                    ("%d < %d < %d" if isInteger else "%f < %f < %f") % (ranges['minimum'], value, ranges['maximum'])
+                )
 
         if len(scalepoints_unsorted) != 0:
-            unsorted = dict(s for s in scalepoints_unsorted)
-            values   = list(v for v, l in scalepoints_unsorted)
-            values.sort()
-            scalepoints = list({ 'value': v, 'label': unsorted[v] } for v in values)
-            del unsorted, values
-
+            scalepoints = self.sort_scalepoints(scalepoints_unsorted)
         del scalepoints_unsorted
 
-    def control_with_range3(self):
-        if "enumeration" in properties and len(scalepoints) <= 1:
-            self.errors.append("port '%s' wants to use enumeration but doesn't have enough values" % portname)
-            properties.remove("enumeration")
+        return scalepoints
+
+    def value_integer(self, subject, subject_name):
+        value = 0
+
+        if is_integer(lilv.lilv_node_as_string(subject)):
+            value = lilv.lilv_node_as_int(subject)
+
+        else:
+            value = lilv.lilv_node_as_float(subject)
+            if fmod(value, 1.0) == 0.0:
+                self.warnings.append("port '%s' has integer property but %s value is float" % (self.portname, subject_name))
+            else:
+                self.register_error("has integer property but %s value has non-zero decimals", subject_name)
+            value = int(value)
+
+        return value
+
+    def sort_scalepoints(self, scalepoints_unsorted):
+        unsorted = dict(s for s in scalepoints_unsorted)
+        values = list(v for v, l in scalepoints_unsorted)
+        values.sort()
+        scalepoints = list(
+            {'value': v, 'label': unsorted[v]} for v in values
+        )
+        #del unsorted  # python2 error
+        del values
+
+        return scalepoints
 
     def get_port_data(self, port, subj):
         nodes = port.get_value(subj.me)

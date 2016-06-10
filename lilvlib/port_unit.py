@@ -3,12 +3,12 @@
 
 import lilv
 
-from .lilvlib import NS
+from lilvlib import NS
 
 
 class PortUnit:
 
-    def __init__(self, world, portname):
+    def __init__(self, world, port, portname, types):
         self.ns_rdfs = NS(world, lilv.LILV_NS_RDFS)
         self.ns_units = NS(world, "http://lv2plug.in/ns/extensions/units#")
 
@@ -18,14 +18,15 @@ class PortUnit:
         self.world = world
         self.portname = portname
 
+        self.units = self.generate_units(port, types)
+
     def register_error(self, message, params=()):
         self.errors.append('port %s has' % self.portname + message % params)
 
-    @property
-    def units(self):
-        label, render, symbol = self.unit_info(self.portname)
+    def generate_units(self, port, types):
+        label, render, symbol = self.unit_info(port, self.portname)
 
-        if "Control" in self.types and label and render and symbol:
+        if "Control" in types and label and render and symbol:
             return {
                 'label': label,
                 'render': render,
@@ -34,13 +35,9 @@ class PortUnit:
         else:
             return {}
 
-    def unit(self):
-        port_value = self.port.get_value(self.ns_units.unit.me)
-        return lilv.lilv_nodes_get_first(port_value)
-
     '''control ports might contain unit'''
-    def unit_info(self, portname):
-        unit = self.unit()
+    def unit_info(self, port, portname):
+        unit = self.unit(port)
 
         if unit is not None:
             uri = lilv.lilv_node_as_uri(unit)
@@ -51,6 +48,10 @@ class PortUnit:
                 return self.custom_unit(unit)
 
         return (None, None, None)
+
+    def unit(self, port):
+        port_value = port.get_value(self.ns_units.unit.me)
+        return lilv.lilv_nodes_get_first(port_value)
 
     def pre_existing_lv2_unit(self, unit_uri):
         uri = unit_uri.replace("http://lv2plug.in/ns/extensions/units#", "", 1)
@@ -69,6 +70,38 @@ class PortUnit:
             )
 
         return (label, render, symbol)
+
+    def get_port_unit(self, miniuri):
+        # using label, render, symbol
+        units = {
+            's': ["seconds", "%f s", "s"],
+            'ms': ["milliseconds", "%f ms", "ms"],
+            'min': ["minutes", "%f mins", "min"],
+            'bar': ["bars", "%f bars", "bars"],
+            'beat': ["beats", "%f beats", "beats"],
+            'frame': ["audio frames", "%f frames", "frames"],
+            'm': ["metres", "%f m", "m"],
+            'cm': ["centimetres", "%f cm", "cm"],
+            'mm': ["millimetres", "%f mm", "mm"],
+            'km': ["kilometres", "%f km", "km"],
+            'inch': ["inches", """%f\"""", "in"],
+            'mile': ["miles", "%f mi", "mi"],
+            'db': ["decibels", "%f dB", "dB"],
+            'pc': ["percent", "%f%%", "%"],
+            'coef': ["coefficient", "* %f", "*"],
+            'hz': ["hertz", "%f Hz", "Hz"],
+            'khz': ["kilohertz", "%f kHz", "kHz"],
+            'mhz': ["megahertz", "%f MHz", "MHz"],
+            'bpm': ["beats per minute", "%f BPM", "BPM"],
+            'oct': ["octaves", "%f octaves", "oct"],
+            'cent': ["cents", "%f ct", "ct"],
+            'semitone12TET': ["semitones", "%f semi", "semi"],
+            'degree': ["degrees", "%f deg", "deg"],
+            'midiNote': ["MIDI note", "MIDI note %d", "note"],
+        }
+        if miniuri in units.keys():
+            return units[miniuri]
+        return ("","","")
 
     def custom_unit(self, unit):
         xlabel = self.find_first_node(unit, self.ns_rdfs.label.me)

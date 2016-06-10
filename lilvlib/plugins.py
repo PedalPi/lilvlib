@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from pprint import pprint
+
+import lilv
+import os
+
+from plugin import Plugin
+
+
+def get_all_plugins():
+    world = lilv.World()
+    world.load_all()
+    plugins = world.get_all_plugins()
+
+    return [Plugin(world, p, False).data for p in plugins]
+
 
 '''
 Get plugin-related info from a list of lv2 bundles
 
-@a bundles is a list of strings, consisting of directories in the filesystem (absolute pathnames).
+@param bundles is a list of strings, consisting of directories in the
+               filesystem (absolute pathnames).
 '''
 def get_plugins_info(bundles):
     if len(bundles) == 0:
@@ -41,7 +57,7 @@ def get_plugins_info(bundles):
 
     return [Plugin(world, p, False) for p in plugins]
 
-
+'''
 if __name__ == '__main__':
     from sys import argv  # , exit
     from pprint import pprint
@@ -65,7 +81,12 @@ if __name__ == '__main__':
                 i['warnings'].remove(warn)
 
         pprint({
-            'uri'     : i['uri'],
-            'errors'  : i['errors'],
+            'uri': i['uri'],
+            'errors': i['errors'],
             'warnings': i['warnings']
         }, width=200)
+'''
+
+
+if __name__ == "__main__":
+    pprint(get_all_plugins(), width=200)
