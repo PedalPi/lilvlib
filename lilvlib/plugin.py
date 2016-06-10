@@ -6,6 +6,7 @@ import os
 
 from .lilvlib import NS
 from .port import Port
+from .plugin_author import PluginAuthor
 
 
 class Plugin:
@@ -16,12 +17,12 @@ class Plugin:
         self.useAbsolutePath = useAbsolutePath
 
         self.ns_doap = NS(world, lilv.LILV_NS_DOAP)
-        self.ns_foaf = NS(world, lilv.LILV_NS_FOAF)
-        self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
-        #self.ns_rdfs = NS(world, lilv.LILV_NS_RDFS)
+        #self.ns_foaf = NS(world, lilv.LILV_NS_FOAF)
+        #self.ns_rdf = NS(world, lilv.LILV_NS_RDF)
+        self.ns_rdfs = NS(world, lilv.LILV_NS_RDFS)
         self.ns_lv2core = NS(world, lilv.LILV_NS_LV2)
-        self.ns_atom = NS(world, "http://lv2plug.in/ns/ext/atom#")
-        self.ns_midi = NS(world, "http://lv2plug.in/ns/ext/midi#")
+        #self.ns_atom = NS(world, "http://lv2plug.in/ns/ext/atom#")
+        #self.ns_midi = NS(world, "http://lv2plug.in/ns/ext/midi#")
         self.ns_morph = NS(world, "http://lv2plug.in/ns/ext/morph#")
         self.ns_pprops = NS(world, "http://lv2plug.in/ns/ext/port-props#")
         self.ns_pset = NS(world, "http://lv2plug.in/ns/ext/presets#")
@@ -35,6 +36,12 @@ class Plugin:
         self.bundleuri = self.plugin.get_bundle_uri().as_string()
         self.bundle = lilv.lilv_uri_to_path(self.bundleuri)
 
+        self.author = PluginAuthor(
+            world,
+            plugin,
+            self.bundleuri,
+            self.ns_doap
+        ).author
 
     def plugin_get_first_value(self, subject):
         return self.plugin.get_value(subject).get_first()
@@ -86,7 +93,12 @@ class Plugin:
         if not lic:
             prj = self.plugin.get_value(self.ns_lv2core.project).get_first()
             if prj.me is not None:
-                licsnode = lilv.lilv_world_get(self.world.me, prj.me, self.ns_doap.license.me, None)
+                licsnode = lilv.lilv_world_get(
+                    self.world.me,
+                    prj.me,
+                    self.ns_doap.license.me,
+                    None
+                )
                 if licsnode is not None:
                     lic = lilv.lilv_node_as_string(licsnode)
                 del licsnode
@@ -151,42 +163,6 @@ class Plugin:
             stability = "stable"
 
         return (version, minorVersion, microVersion, stability)
-
-    @property
-    def author(self):
-        author = {
-            'name': self.plugin.get_author_name().as_string() or "",
-            'homepage': self.plugin.get_author_homepage().as_string() or "",
-            'email': self.plugin.get_author_email().as_string() or "",
-        }
-
-        if not author['name']:
-            self.errors.append("plugin author name is missing")
-
-        if not author['homepage']:
-            prj = self.plugin.get_value(self.ns_lv2core.project).get_first()
-            if prj.me is not None:
-                maintainer = lilv.lilv_world_get(self.world.me, prj.me, self.ns_doap.maintainer.me, None)
-                if maintainer is not None:
-                    homepage = lilv.lilv_world_get(self.world.me, maintainer, self.ns_foaf.homepage.me, None)
-                    if homepage is not None:
-                        author['homepage'] = lilv.lilv_node_as_string(homepage)
-                    del homepage
-                del maintainer
-            del prj
-
-        if not author['homepage']:
-            warnings.append("plugin author homepage is missing")
-
-        if not author['email']:
-            pass
-        elif author['email'].startswith(self.bundleuri):
-            author['email'] = author['email'].replace(self.bundleuri,"",1)
-            self.warnings.append("plugin author email entry is missing 'mailto:' prefix")
-        elif author['email'].startswith("mailto:"):
-            author['email'] = author['email'].replace("mailto:","",1)
-
-        return author
 
     @property
     def brand(self, author):
@@ -295,3 +271,17 @@ class Plugin:
                 if typ not in list(ports.keys()):
                     ports[typ] = {'input': [], 'output': []}
                 ports[typ]["input" if isInput else "output"].append(info)
+
+        '''
+        # check for duplicate names
+        if portname in portsymbols:
+            self.warnings.append("port name '%s' is not unique" % portname)
+        else:
+            portnames.append(portname)
+
+        # check for duplicate symbols
+        if portsymbol in portsymbols:
+            self.errors.append("port symbol '%s' is not unique" % portsymbol)
+        else:
+            portsymbols.append(portsymbol)
+        '''

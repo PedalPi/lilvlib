@@ -8,7 +8,6 @@ import json
 import lilv
 import os
 
-from math import fmod
 
 # ------------------------------------------------------------------------------------------------------------
 # Utilities
