@@ -77,13 +77,19 @@ LILV_NS_OWL = _lilv.LILV_NS_OWL
 LILV_NS_RDF = _lilv.LILV_NS_RDF
 LILV_NS_RDFS = _lilv.LILV_NS_RDFS
 LILV_NS_XSD = _lilv.LILV_NS_XSD
+LILV_URI_ATOM_PORT = _lilv.LILV_URI_ATOM_PORT
 LILV_URI_AUDIO_PORT = _lilv.LILV_URI_AUDIO_PORT
 LILV_URI_CONTROL_PORT = _lilv.LILV_URI_CONTROL_PORT
+LILV_URI_CV_PORT = _lilv.LILV_URI_CV_PORT
 LILV_URI_EVENT_PORT = _lilv.LILV_URI_EVENT_PORT
 LILV_URI_INPUT_PORT = _lilv.LILV_URI_INPUT_PORT
 LILV_URI_MIDI_EVENT = _lilv.LILV_URI_MIDI_EVENT
 LILV_URI_OUTPUT_PORT = _lilv.LILV_URI_OUTPUT_PORT
 LILV_URI_PORT = _lilv.LILV_URI_PORT
+
+def lilv_free(*args) -> "void" :
+  """lilv_free(void * ptr)"""
+  return _lilv.lilv_free(*args)
 
 def lilv_uri_to_path(*args) -> "char const *" :
   """lilv_uri_to_path(char const * uri) -> char const *"""
@@ -348,7 +354,7 @@ def lilv_world_load_all(*args) -> "void" :
   return _lilv.lilv_world_load_all(*args)
 
 def lilv_world_load_bundle(*args) -> "void" :
-  """lilv_world_load_bundle(LilvWorld * world, LilvNode * bundle_uri)"""
+  """lilv_world_load_bundle(LilvWorld * world, LilvNode const * bundle_uri)"""
   return _lilv.lilv_world_load_bundle(*args)
 
 def lilv_world_load_specifications(*args) -> "void" :
@@ -360,7 +366,7 @@ def lilv_world_load_plugin_classes(*args) -> "void" :
   return _lilv.lilv_world_load_plugin_classes(*args)
 
 def lilv_world_unload_bundle(*args) -> "int" :
-  """lilv_world_unload_bundle(LilvWorld * world, LilvNode * bundle_uri) -> int"""
+  """lilv_world_unload_bundle(LilvWorld * world, LilvNode const * bundle_uri) -> int"""
   return _lilv.lilv_world_unload_bundle(*args)
 
 def lilv_world_load_resource(*args) -> "int" :
@@ -1375,6 +1381,10 @@ class Plugins(_object):
     			plugin = self.plugins.get(self.iter)
     			self.iter = self.plugins.next(self.iter)
     			return plugin
+
+    		def next(self):
+    			"Python 2 iterator protocol"
+    			return Iterator.__next__(self)
 
     	return Iterator(self)
 

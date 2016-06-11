@@ -65,8 +65,8 @@ export BASEDIR="/tmp/python3-lilv-build"
 export PREFIX="$BASEDIR/system"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 
-export CFLAGS="-fPIC -O2 -mtune=generic"
-export CXXFLAGS="-fPIC -O2 -mtune=generic"
+export CFLAGS="-fPIC -O2 -mtune=native" #generic
+export CXXFLAGS="-fPIC -O2 -mtune=native" #generic
 export CPPFLAGS=""
 export LDFLAGS="-ldl -lm"
 
