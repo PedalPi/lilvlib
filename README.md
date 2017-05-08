@@ -1,4 +1,4 @@
-## lilvlib
+# lilvlib
 
 This repository contains a build script for lilvlib and its python3-lilv dependency, using the latest development version from git.
 
@@ -24,3 +24,28 @@ This includes:
 The sord_validate_mod is a helper script that runs sord_validate with the correct bundles.
 
 Because this package uses the definitions copied during build it does not depend on any external resources.
+
+## Requirements
+
+### Linux
+
+ - debuild (in devscripts package)
+ - git
+ - pkg-config
+ - python3
+ - swig
+ - debhelper
+ - dpkg-dev
+ - python3-all-dev
+ - python3-numpy
+ - libpcre
+
+Maybe be neccessary install lastest liblilv-0-0, then 
+```
+apt-cache show liblilv-0-0
+# if version > 0.22
+sudo apt-get remove liblilv-0-
+# This build will install lastest version
+```
+
+### Mac
